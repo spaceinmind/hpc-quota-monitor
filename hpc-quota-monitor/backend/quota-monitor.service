@@ -1,0 +1,18 @@
+[Unit]
+Description=HPC Quota Monitor API
+After=network.target
+
+[Service]
+# ── Edit these three lines ─────────────────────────────────────────────
+User=YOUR_HPC_USERNAME
+WorkingDirectory=/home/YOUR_HPC_USERNAME/quota-monitor
+Environment="QUOTA_MOUNT=/scratch"
+Environment="QUOTA_GROUP=mygroup"
+Environment="QUOTA_GB=1000"
+# ──────────────────────────────────────────────────────────────────────
+ExecStart=/home/YOUR_HPC_USERNAME/.local/bin/uvicorn server:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
