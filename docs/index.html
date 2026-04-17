@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -257,17 +258,33 @@ function render(d) {
 }
 
 function renderUsers(d) {
-  const perUser = Math.round(d.quotaGB / Math.max(d.users.length, 1));
+  const perUser    = Math.round(d.quotaGB / Math.max(d.users.length, 1));
+  const totalKInodes = d.limitInodes ? d.limitInodes / 1000 : null;
+  const perUserKInodes = totalKInodes ? Math.round(totalKInodes / Math.max(d.users.length, 1)) : null;
+  const showInodes = d.users.some(u => u.kInodes > 0);
+
   document.getElementById('userBars').innerHTML =
-    `<p class="sec-title">Per-user usage (fair share: ${fmt(perUser)} each)</p>` +
+    `<p class="sec-title">Per-user usage (fair share: ${fmt(perUser)} each)</p>
+     <div style="display:flex;gap:16px;margin-bottom:12px;font-size:11px;color:var(--text2);">
+       <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:6px;border-radius:3px;background:#378ADD;display:inline-block;"></span>Disk</span>
+       ${showInodes ? '<span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:6px;border-radius:3px;background:#EF9F27;display:inline-block;"></span>Inodes</span>' : ''}
+     </div>` +
     d.users.map(u => {
-      const pct = Math.round(u.usedGB / perUser * 100);
+      const diskPct   = Math.round(u.usedGB / perUser * 100);
+      const inodePct  = (perUserKInodes && u.kInodes) ? Math.round(u.kInodes / perUserKInodes * 100) : null;
+      const inodeMil  = u.kInodes ? (u.kInodes / 1000).toFixed(1) + 'M' : null;
       return `<div class="bar-row">
         <div class="bar-hdr">
-          <span class="bar-name">${u.name}${badge(pct)}</span>
-          <span class="bar-info">${fmt(u.usedGB)} / ${fmt(perUser)} · ${pct}%</span>
+          <span class="bar-name">${u.name}${badge(diskPct)}</span>
+          <span class="bar-info">${fmt(u.usedGB)} · ${diskPct}%${inodeMil ? ' · ' + inodeMil + ' inodes' : ''}</span>
         </div>
-        <div class="bar-track"><div class="bar-fill" style="width:${Math.min(pct,100)}%;background:${colHex(pct)};"></div></div>
+        <div class="bar-track" style="margin-bottom:3px;">
+          <div class="bar-fill" style="width:${Math.min(diskPct,100)}%;background:#378ADD;"></div>
+        </div>
+        ${showInodes && inodePct !== null ? `
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${Math.min(inodePct,100)}%;background:${colHex(inodePct)};"></div>
+        </div>` : ''}
       </div>`;
     }).join('');
 }
