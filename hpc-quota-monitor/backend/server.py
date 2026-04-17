@@ -30,6 +30,13 @@ def run(cmd: str, timeout: int = 60):
         return "", str(e)
 
 def parse_quota_output(output: str) -> Optional[dict]:
+    # Strip ANSI colour codes
+    output = re.sub(r'\x1b\[[0-9;]*m', '', output)
+    # Extract only the oz002 group block
+    match = re.search(r'Disk quotas for grp oz002.*?(?=Disk quotas|$)', output, re.DOTALL)
+    if not match:
+        return None
+    output = match.group(0)
     result = {}
     data_re = re.compile(
         rf"^\s*{re.escape(FILESYSTEM)}\s+"
