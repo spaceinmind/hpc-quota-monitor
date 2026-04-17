@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -122,14 +121,16 @@
   <div class="metric-grid" id="metrics"></div>
 
   <div class="tab-row">
-    <button class="tab active" data-tab="users"   onclick="switchTab('users',this)">By user</button>
+    <button class="tab active" data-tab="users-disk"   onclick="switchTab('users-disk',this)">By user — disk</button>
+    <button class="tab"        data-tab="users-inodes" onclick="switchTab('users-inodes',this)">By user — inodes</button>
     <button class="tab"        data-tab="folders" onclick="switchTab('folders',this)">By folder</button>
     <button class="tab"        data-tab="rings"   onclick="switchTab('rings',this)">Overview</button>
     <button class="tab"        data-tab="trend"   onclick="switchTab('trend',this)">Trend</button>
     <button class="tab"        data-tab="config"  onclick="switchTab('config',this)">Config</button>
   </div>
 
-  <div class="panel active" id="panel-users"><div class="card" id="userBars"></div></div>
+  <div class="panel active" id="panel-users-disk"><div class="card" id="userDiskBars"></div></div>
+  <div class="panel"        id="panel-users-inodes"><div class="card" id="userInodeBars"></div></div>
   <div class="panel"        id="panel-folders"><div class="card" id="folderPanel"></div></div>
   <div class="panel"        id="panel-rings"><div class="card"><p class="sec-title">Group at a glance</p><div class="rings-wrap" id="rings"></div></div></div>
   <div class="panel"        id="panel-trend">
@@ -251,41 +252,67 @@ function render(d) {
     <div class="metric"><div class="metric-label">Users</div><div class="metric-value">${d.users.length}</div><div class="metric-sub">${d.users.filter(u=>u.usedGB/(d.quotaGB/Math.max(d.users.length,1))*100>=cfg.threshold).length} over threshold</div></div>
   `;
 
-  renderUsers(d);
+  renderUsersDisk(d);
+  renderUsersInodes(d);
   renderFolders(d);
   renderRings(d, pct);
   if (document.getElementById('panel-trend').classList.contains('active')) renderTrend();
 }
 
-function renderUsers(d) {
-  const perUser    = Math.round(d.quotaGB / Math.max(d.users.length, 1));
-  const totalKInodes = d.limitInodes ? d.limitInodes / 1000 : null;
-  const perUserKInodes = totalKInodes ? Math.round(totalKInodes / Math.max(d.users.length, 1)) : null;
-  const showInodes = d.users.some(u => u.kInodes > 0);
+function renderUsersDisk(d) {
+  const DISK_CRIT_PCT = cfg.threshold;
+  function diskBadge(pct) {
+    if (pct >= DISK_CRIT_PCT) return '<span class="badge b-crit">Critical</span>';
+    if (pct >= 20)            return '<span class="badge b-warn">High</span>';
+    return '';
+  }
+  const sorted = [...d.users].sort((a,b) => b.usedGB - a.usedGB);
+  document.getElementById('userDiskBars').innerHTML =
+    '<p class="sec-title">Disk usage per user — % of total quota (' + fmt(d.quotaGB) + ')</p>' +
+    sorted.map(u => {
+      const pct = parseFloat((u.usedGB / d.quotaGB * 100).toFixed(1));
+      return '<div class="bar-row">' +
+        '<div class="bar-hdr">' +
+          '<span class="bar-name">' + u.name + diskBadge(pct) + '</span>' +
+          '<span class="bar-info">' + fmt(u.usedGB) + ' · ' + pct + '% of total</span>' +
+        '</div>' +
+        '<div class="bar-track">' +
+          '<div class="bar-fill" style="width:' + Math.min(pct,100) + '%;background:#378ADD;"></div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+}
 
-  document.getElementById('userBars').innerHTML =
-    `<p class="sec-title">Per-user usage (fair share: ${fmt(perUser)} each)</p>
-     <div style="display:flex;gap:16px;margin-bottom:12px;font-size:11px;color:var(--text2);">
-       <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:6px;border-radius:3px;background:#378ADD;display:inline-block;"></span>Disk</span>
-       ${showInodes ? '<span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:6px;border-radius:3px;background:#EF9F27;display:inline-block;"></span>Inodes</span>' : ''}
-     </div>` +
-    d.users.map(u => {
-      const diskPct   = Math.round(u.usedGB / perUser * 100);
-      const inodePct  = (perUserKInodes && u.kInodes) ? Math.round(u.kInodes / perUserKInodes * 100) : null;
-      const inodeMil  = u.kInodes ? (u.kInodes / 1000).toFixed(1) + 'M' : null;
-      return `<div class="bar-row">
-        <div class="bar-hdr">
-          <span class="bar-name">${u.name}${badge(diskPct)}</span>
-          <span class="bar-info">${fmt(u.usedGB)} · ${diskPct}%${inodeMil ? ' · ' + inodeMil + ' inodes' : ''}</span>
-        </div>
-        <div class="bar-track" style="margin-bottom:3px;">
-          <div class="bar-fill" style="width:${Math.min(diskPct,100)}%;background:#378ADD;"></div>
-        </div>
-        ${showInodes && inodePct !== null ? `
-        <div class="bar-track">
-          <div class="bar-fill" style="width:${Math.min(inodePct,100)}%;background:${colHex(inodePct)};"></div>
-        </div>` : ''}
-      </div>`;
+function renderUsersInodes(d) {
+  const totalKInodes = d.limitInodes ? d.limitInodes / 1000 : null;
+  const INODE_CRIT   = 5;
+  if (!totalKInodes) {
+    document.getElementById('userInodeBars').innerHTML = '<p style="font-size:13px;color:var(--text2);">Inode data not available.</p>';
+    return;
+  }
+  function inodeBadge(pct) {
+    if (pct >= INODE_CRIT) return '<span class="badge b-crit">Critical</span>';
+    if (pct >= 2)          return '<span class="badge b-warn">High</span>';
+    return '';
+  }
+  const sorted = [...d.users].filter(u => u.kInodes > 0).sort((a,b) => b.kInodes - a.kInodes);
+  const totalM = (d.limitInodes / 1e6).toFixed(0) + 'M';
+  document.getElementById('userInodeBars').innerHTML =
+    '<p class="sec-title">Inode usage per user — % of total limit (' + totalM + ' inodes)  ·  critical: &gt;5%</p>' +
+    sorted.map(u => {
+      const pct    = parseFloat((u.kInodes / totalKInodes * 100).toFixed(2));
+      const mil    = (u.kInodes / 1000).toFixed(1) + 'M';
+      const barCol = pct >= INODE_CRIT ? '#E24B4A' : pct >= 2 ? '#EF9F27' : '#1D9E75';
+      const barW   = Math.min(pct * 4, 100);
+      return '<div class="bar-row">' +
+        '<div class="bar-hdr">' +
+          '<span class="bar-name">' + u.name + inodeBadge(pct) + '</span>' +
+          '<span class="bar-info">' + mil + ' inodes · ' + pct + '% of total</span>' +
+        '</div>' +
+        '<div class="bar-track">' +
+          '<div class="bar-fill" style="width:' + barW + '%;background:' + barCol + ';"></div>' +
+        '</div>' +
+      '</div>';
     }).join('');
 }
 
