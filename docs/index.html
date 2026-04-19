@@ -341,11 +341,10 @@ function renderFolders(d) {
 
 function renderRings(d, totalPct) {
   const r = 40, circ = 2*Math.PI*r;
-  const perUser = Math.round(d.quotaGB / Math.max(d.users.length,1));
   const items = [
     {label:'Group total', pct:totalPct, sub:fmt(d.usedGB)+' used'},
     ...d.users.slice(0,4).map(u => {
-      const p = Math.min(Math.round(u.usedGB/perUser*100),100);
+      const p = parseFloat((u.usedGB / d.quotaGB * 100).toFixed(1));
       return {label:u.name, pct:p, sub:fmt(u.usedGB)};
     })
   ];
