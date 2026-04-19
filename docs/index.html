@@ -269,8 +269,8 @@ function render(d) {
 function renderUsersDisk(d) {
   const DISK_CRIT_PCT = cfg.threshold;
   function diskBadge(pct) {
-    if (pct >= DISK_CRIT_PCT) return '<span class="badge b-crit">Critical</span>';
-    if (pct >= 20)            return '<span class="badge b-warn">High</span>';
+    if (pct >= 5) return '<span class="badge b-crit">Critical</span>';
+    if (pct >= 1) return '<span class="badge b-warn">High</span>';
     return '';
   }
   const sorted = [...d.users].sort((a,b) => b.usedGB - a.usedGB);
