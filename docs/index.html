@@ -404,7 +404,7 @@ function renderTrend() {
       scales: {
         x: { ticks:{font:{size:10},color:tc}, grid:{display:false} },
         y: {
-          min: 0, max: 100,
+          min: Math.max(0, Math.min(...trendDisk, ...trendInodes) - 1),
           ticks: { font:{size:10}, color:tc, callback: v => v+'%' },
           grid: { color: isDark?'rgba(255,255,255,.05)':'rgba(0,0,0,.05)' }
         }
