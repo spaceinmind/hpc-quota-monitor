@@ -136,7 +136,11 @@
   <div class="panel"        id="panel-trend">
     <div class="card">
       <p class="sec-title">Usage history</p>
-      <div style="position:relative;height:210px;"><canvas id="trendChart" role="img" aria-label="Line chart of group disk usage over time">Disk usage over time.</canvas></div>
+      <div style="display:flex;gap:16px;margin-bottom:8px;font-size:12px;color:var(--text2);">
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:16px;height:2px;background:#378ADD;display:inline-block;border-radius:1px;"></span>Disk %</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:16px;height:2px;background:#EF9F27;display:inline-block;border-radius:1px;border-top:2px dashed #EF9F27;"></span>Inodes %</span>
+      </div>
+      <div style="position:relative;height:210px;"><canvas id="trendChart" role="img" aria-label="Line chart of group disk and inode usage percentage over time">Disk and inode usage % over time.</canvas></div>
     </div>
   </div>
   <div class="panel" id="panel-config">
@@ -189,8 +193,9 @@ let paused    = false;
 let countdown = cfg.intervalSec;
 let tickerID  = null;
 let secondID  = null;
-let trendData = [];
-let trendChart = null;
+let trendDisk   = [];
+let trendInodes = [];
+let trendChart  = null;
 let lastPayload = null;
 
 function fmt(gb) { return gb >= 1000 ? (gb/1000).toFixed(1)+' TB' : gb+' GB'; }
@@ -208,8 +213,10 @@ async function fetchData() {
     const data = await res.json();
     lastPayload = data;
     countdown = cfg.intervalSec;
-    trendData.push(data.usedGB);
-    if (trendData.length > 60) trendData.shift();
+    const diskPct  = data.quotaGB  ? Math.round(data.usedGB  / data.quotaGB  * 100) : null;
+    const inodePct = data.limitInodes ? Math.round(data.usedInodes / data.limitInodes * 100) : null;
+    if (diskPct  !== null) { trendDisk.push(diskPct);   if (trendDisk.length   > 60) trendDisk.shift(); }
+    if (inodePct !== null) { trendInodes.push(inodePct); if (trendInodes.length > 60) trendInodes.shift(); }
     render(data);
     setStatus('live', 'Live · '+data.group+' on '+data.mount);
     document.getElementById('lastUpdated').textContent =
@@ -262,8 +269,8 @@ function render(d) {
 function renderUsersDisk(d) {
   const DISK_CRIT_PCT = cfg.threshold;
   function diskBadge(pct) {
-    if (pct >= 5) return '<span class="badge b-crit">Critical</span>';
-    if (pct >= 1) return '<span class="badge b-warn">High</span>';
+    if (pct >= DISK_CRIT_PCT) return '<span class="badge b-crit">Critical</span>';
+    if (pct >= 20)            return '<span class="badge b-warn">High</span>';
     return '';
   }
   const sorted = [...d.users].sort((a,b) => b.usedGB - a.usedGB);
@@ -360,27 +367,47 @@ function renderRings(d, totalPct) {
 }
 
 function renderTrend() {
-  if (trendData.length < 2) return;
+  if (trendDisk.length < 2 && trendInodes.length < 2) return;
   if (trendChart) trendChart.destroy();
   const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
-  const tc = isDark ? '#888' : '#aaa';
+  const tc     = isDark ? '#888' : '#aaa';
+  const n      = Math.max(trendDisk.length, trendInodes.length);
+  const labels = Array.from({length: n}, (_,i) => i===n-1 ? 'now' : '-'+(n-1-i)+'m');
   trendChart = new Chart(document.getElementById('trendChart'), {
     type: 'line',
     data: {
-      labels: trendData.map((_,i) => i===trendData.length-1?'now':'-'+(trendData.length-1-i)+'m'),
-      datasets: [{
-        label: 'Used (GB)', data: trendData,
-        borderColor: '#378ADD',
-        backgroundColor: isDark?'rgba(55,138,221,.1)':'rgba(55,138,221,.07)',
-        fill: true, tension: 0.4, pointRadius: 2, borderWidth: 2
-      }]
+      labels,
+      datasets: [
+        {
+          label: 'Disk %',
+          data: trendDisk,
+          borderColor: '#378ADD',
+          backgroundColor: 'transparent',
+          tension: 0.4, pointRadius: 2, borderWidth: 2,
+          borderDash: []
+        },
+        {
+          label: 'Inodes %',
+          data: trendInodes,
+          borderColor: '#EF9F27',
+          backgroundColor: 'transparent',
+          tension: 0.4, pointRadius: 2, borderWidth: 2,
+          borderDash: [4, 3]
+        }
+      ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false }
+      },
       scales: {
         x: { ticks:{font:{size:10},color:tc}, grid:{display:false} },
-        y: { ticks:{font:{size:10},color:tc,callback:v=>v+' GB'}, grid:{color:isDark?'rgba(255,255,255,.05)':'rgba(0,0,0,.05)'} }
+        y: {
+          min: 0, max: 100,
+          ticks: { font:{size:10}, color:tc, callback: v => v+'%' },
+          grid: { color: isDark?'rgba(255,255,255,.05)':'rgba(0,0,0,.05)' }
+        }
       }
     }
   });
