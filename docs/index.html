@@ -157,8 +157,8 @@
       <p class="sec-title">Auto-refresh</p>
       <div class="cfg-row">
         <label>Interval</label>
-        <input type="range" id="intervalSlider" min="10" max="300" value="60" step="10" oninput="setInterval_(this.value)">
-        <span class="cfg-val" id="intervalVal">60 s</span>
+        <input type="range" id="intervalSlider" min="60" max="86400" value="86400" step="60" oninput="setInterval_(this.value)">
+        <span class="cfg-val" id="intervalVal">86400 s</span>
       </div>
       <div class="cfg-row">
         <label>Alert threshold</label>
@@ -185,7 +185,7 @@
 <script>
 const cfg = {
   apiUrl:      localStorage.getItem('hpc_api_url')    || 'http://YOUR-HPC-LOGIN-NODE:8000/api/quota',
-  intervalSec: parseInt(localStorage.getItem('hpc_interval') || '60'),
+  intervalSec: parseInt(localStorage.getItem('hpc_interval') || '86400'),
   threshold:   parseInt(localStorage.getItem('hpc_thresh')   || '80'),
 };
 
@@ -442,7 +442,9 @@ function saveConfig() {
 function setInterval_(v) {
   cfg.intervalSec = parseInt(v);
   countdown = cfg.intervalSec;
-  document.getElementById('intervalVal').textContent = v+' s';
+  const h = Math.floor(v/3600), m = Math.floor((v%3600)/60), s = v%60;
+  const label = h>0 ? h+'h '+(m>0?m+'m':'') : m>0 ? m+'m' : s+'s';
+  document.getElementById('intervalVal').textContent = label.trim();
   localStorage.setItem('hpc_interval', v);
   startTicker();
 }
